@@ -1,47 +1,80 @@
 package com.example.modernmusic
 
+import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.modernmusic.ui.theme.ModernMusicTheme
+import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SearchView
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.modernmusic.data.entity.album.Album
+import com.example.modernmusic.databinding.ActivityMainBinding
+import com.example.modernmusic.utils.album.AlbumAdapter
+import com.example.modernmusic.utils.ItemClickListener
+import com.example.modernmusic.viewmodel.AlbumViewModelFactory
+import com.example.modernmusic.view.CreateOrEditAlbum
+import com.example.modernmusic.view.ViewAlbum
+import com.example.modernmusic.viewmodel.AlbumViewModel
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity(), ItemClickListener<Album>
+{
+    private lateinit var binding: ActivityMainBinding
+    private val albumViewModel: AlbumViewModel by viewModels {
+        AlbumViewModelFactory((application as StartApp).albumRepository)
+    }
+    private lateinit var adapter: AlbumAdapter
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            ModernMusicTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+        binding = ActivityMainBinding.inflate(layoutInflater)
+
+        setContentView(binding.root)
+
+        binding.addButton.setOnClickListener {
+            val intent = Intent(this, CreateOrEditAlbum::class.java)
+            startActivity(intent)
+        }
+
+        adapter = AlbumAdapter(emptyList(), this)
+        setRecyclerView()
+        setupSearch()
+    }
+
+    private fun setupSearch() {
+        binding.searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean {
+                return false
+            }
+
+            override fun onQueryTextChange(newText: String?): Boolean {
+                albumViewModel.search(newText)
+                    .observe(this@MainActivity) { albums ->
+                        adapter.updateData(albums)
+                    }
+                return true
+            }
+        })
+    }
+
+    private fun setRecyclerView() {
+        binding.recyclerView.apply {
+            layoutManager = LinearLayoutManager(applicationContext)
+            adapter = this@MainActivity.adapter
+        }
+
+        albumViewModel.albums.observe(this) { albums ->
+            if (::adapter.isInitialized) {
+                adapter.updateData(albums)
             }
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
+    override fun onViewItem(item: Album) {
+        val intent = Intent(this, ViewAlbum::class.java)
+        intent.putExtra("ALBUM_ID", item.id)
+        startActivity(intent)
+    }
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    ModernMusicTheme {
-        Greeting("Android")
+    override fun deleteItem(item: Album) {
+        albumViewModel.delete(item)
     }
 }
